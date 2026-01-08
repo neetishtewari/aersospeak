@@ -13,12 +13,31 @@ export function useVoiceSession() {
     const [state, setState] = useState<VoiceSessionState>("idle");
     const [transcript, setTranscript] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+    const debugRef = useRef<string[]>([]);
+
+    const addDebug = useCallback((msg: string) => {
+        const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+        const newEntry = `${timestamp} - ${msg}`;
+        console.log(`[VoiceSession] ${msg}`);
+        // Keep last 10 logs
+        debugRef.current = [...debugRef.current.slice(-9), newEntry];
+        setDebugInfo([...debugRef.current]);
+    }, []);
 
     const deepgramRef = useRef<LiveClient | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioQueueRef = useRef<string[]>([]); // Queue of base64 audio chunks
     const isPlayingRef = useRef(false);
+
+    // Ref to track state in callbacks without re-binding
+    const stateRef = useRef<VoiceSessionState>("idle");
+
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
 
     const playAudio = useCallback(async (base64Audio: string) => {
         try {
@@ -48,14 +67,16 @@ export function useVoiceSession() {
 
         } catch (err) {
             console.error("Audio playback error", err);
+            addDebug(`Audio Playback Error: ${err}`);
         }
-    }, []);
+    }, [addDebug]);
 
     const processAudioQueue = useCallback(async () => {
         if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
 
         isPlayingRef.current = true;
         setState("speaking");
+        addDebug("Playing audio response...");
 
         const nextAudio = audioQueueRef.current.shift();
         if (nextAudio) {
@@ -63,25 +84,21 @@ export function useVoiceSession() {
         }
 
         isPlayingRef.current = false;
+        addDebug("Audio finished");
 
         if (audioQueueRef.current.length > 0) {
             processAudioQueue();
         } else {
             setState("listening");
+            addDebug("Returning to listening state");
         }
-    }, [playAudio]);
-
-    // Ref to track state in callbacks without re-binding
-    const stateRef = useRef<VoiceSessionState>("idle");
-
-    useEffect(() => {
-        stateRef.current = state;
-    }, [state]);
+    }, [playAudio, addDebug]);
 
     const handleProcessing = useCallback(async (text: string) => {
         if (!text.trim()) return;
 
         setState("processing");
+        addDebug("Processing with AI...");
 
         try {
             const res = await fetch("/api/voice/chat", {
@@ -92,91 +109,153 @@ export function useVoiceSession() {
             if (!res.ok) throw new Error("Chat processing failed");
 
             const data = await res.json();
-            // data.audio is base64
+            addDebug("AI response received");
 
-            // Queue audio
             audioQueueRef.current.push(data.audio);
             processAudioQueue();
 
         } catch (err) {
             console.error("Processing error", err);
             setError("Failed to process speech");
+            addDebug("AI Processing Failed");
             setState("listening");
         }
-    }, [processAudioQueue]);
+    }, [processAudioQueue, addDebug]);
 
     const startSession = useCallback(async () => {
         try {
             setState("listening");
             setError(null);
             setTranscript("");
+            setDebugInfo([]);
+            debugRef.current = [];
             audioQueueRef.current = [];
 
+            addDebug("Starting session...");
+
             // 1. Get Token
+            addDebug("Fetching Deepgram token...");
             const response = await fetch("/api/voice/token");
             if (!response.ok) throw new Error("Failed to get Deepgram token");
             const { key } = await response.json();
+            addDebug("Token received");
+
+            addDebug(`UA: ${navigator.userAgent}`);
 
             // 2. Setup Deepgram
+            addDebug("Connecting to Deepgram...");
             const deepgram = createClient(key);
+
+            // Minimal config to rule out parameter conflicts
             const connection = deepgram.listen.live({
                 model: "nova-2",
                 language: "en-US",
-                smart_format: true,
-                endpointing: 300,
             });
             deepgramRef.current = connection;
 
             // 3. Setup Events
             connection.on(LiveTranscriptionEvents.Open, () => {
-                console.log("Deepgram connection open");
+                addDebug("Deepgram Connection OPEN");
 
-                connection.on(LiveTranscriptionEvents.Close, () => {
-                    console.log("Deepgram connection closed");
+                connection.on(LiveTranscriptionEvents.Close, (e) => {
+                    // @ts-ignore
+                    addDebug(`Deepgram Connection CLOSED (Code: ${e?.code}, Reason: ${e?.reason})`);
                     setState("idle");
+                });
+
+                connection.on(LiveTranscriptionEvents.Metadata, (data) => {
+                    addDebug(`Metadata received: ${JSON.stringify(data)}`);
                 });
 
                 connection.on(LiveTranscriptionEvents.Transcript, (data) => {
                     const trans = data.channel.alternatives[0].transcript;
                     if (trans && data.is_final) {
-                        setTranscript((prev) => prev + " " + trans);
-                        handleProcessing(trans);
+                        addDebug(`Transcript: "${trans}"`);
+                        if (stateRef.current === "listening") {
+                            setTranscript((prev) => prev + " " + trans);
+                            handleProcessing(trans);
+                        }
                     }
                 });
 
                 connection.on(LiveTranscriptionEvents.Error, (err) => {
                     console.error("Deepgram error", err);
+                    addDebug(`Deepgram Error: ${err.message}`);
                     setError("Voice connection error");
                 });
             });
 
             // 4. Get Microphone
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+            addDebug("Requesting Microphone...");
+            // Force 1 channel for consistency
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    channelCount: 1,
+                    sampleRate: 16000,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
+            });
+            addDebug("Microphone Acquired");
+
+            let mimeType = undefined;
+            // Prefer opus
+            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+                mimeType = "audio/webm;codecs=opus";
+            } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+                mimeType = "audio/webm";
+            } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+                mimeType = "audio/mp4";
+            }
+            addDebug(`Using MimeType: ${mimeType || "default"}`);
+
+            const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
             mediaRecorderRef.current = mediaRecorder;
 
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0 && deepgramRef.current?.getReadyState() === 1) {
-                    // If the AI is speaking, we might want to "barge in" here?
-                    // For now, let's just keep sending audio so we can detect interruption later.
-                    // However, to prevent echo, we might want to pause sending if state === "speaking"
-                    // Use ref to check current state
-                    if (stateRef.current !== "speaking" && stateRef.current !== "processing") {
-                        deepgramRef.current?.send(event.data);
+            mediaRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0) {
+                    if (deepgramRef.current?.getReadyState() === 1) {
+                        const buffer = await event.data.arrayBuffer();
+                        addDebug(`Sending ${event.data.size} bytes`);
+                        deepgramRef.current.send(buffer);
+                    } else {
+                        addDebug(`Socket not ready (State: ${deepgramRef.current?.getReadyState()})`);
                     }
                 }
             };
 
-            mediaRecorder.start(100);
+            mediaRecorder.onstart = () => addDebug("MediaRecorder: Start event fired");
+            // KeepAlive mechanism
+            const keepAliveInterval = setInterval(() => {
+                if (deepgramRef.current?.getReadyState() === 1) {
+                    // Sending a small JSON keepalive if supported, or just rely on audio
+                    deepgramRef.current.keepAlive();
+                    // Note: SDK has keepAlive(), or we can just hope audio is enough.
+                    // Let's rely on audio + logging for now.
+                    // Actually, explicit KeepAlive might help if audio is silent.
+                    addDebug("KeepAlive check...");
+                }
+            }, 3000);
+
+            mediaRecorder.onstop = () => {
+                addDebug("MediaRecorder: Stop event fired");
+                clearInterval(keepAliveInterval);
+            };
+
+            // Back to 250ms for lower latency
+            mediaRecorder.start(250);
+            addDebug("MediaRecorder Started");
 
         } catch (err: any) {
             console.error(err);
+            addDebug(`Error: ${err.message}`);
             setError(err.message || "Failed to start voice session");
             setState("idle");
         }
-    }, [handleProcessing]);
+    }, [handleProcessing, addDebug]);
 
     const stopSession = useCallback(() => {
+        addDebug("Stopping session...");
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop();
             mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
@@ -188,18 +267,21 @@ export function useVoiceSession() {
             deepgramRef.current = null;
         }
 
-        // Close AudioContext if open
         if (audioContextRef.current) {
             audioContextRef.current.close();
             audioContextRef.current = null;
         }
 
         setState("idle");
-    }, []);
+        addDebug("Session Stopped");
+    }, [addDebug]);
 
     useEffect(() => {
         return () => {
-            stopSession();
+            // Cleanup on unmount
+            if (stateRef.current !== "idle") {
+                stopSession();
+            }
         };
     }, [stopSession]);
 
@@ -208,6 +290,7 @@ export function useVoiceSession() {
         transcript,
         error,
         startSession,
-        stopSession
+        stopSession,
+        debugInfo
     };
 }

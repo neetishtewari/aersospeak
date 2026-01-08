@@ -6,7 +6,7 @@ import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function VoiceControl() {
-    const { state, transcript, error, startSession, stopSession } = useVoiceSession();
+    const { state, transcript, error, startSession, stopSession, debugInfo } = useVoiceSession();
 
     return (
         <div className="flex flex-col items-center gap-6 w-full max-w-md">
@@ -62,6 +62,14 @@ export function VoiceControl() {
                     Speaking
                 </span>
             </div>
+
+            {debugInfo.length > 0 && (
+                <div className="w-full mt-4 p-3 bg-black/50 rounded-lg border border-white/10 text-[10px] font-mono text-zinc-400 h-32 overflow-y-auto">
+                    {debugInfo.map((log, i) => (
+                        <div key={i}>{log}</div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
