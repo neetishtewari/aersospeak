@@ -30,6 +30,7 @@ export function useVoiceSession() {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioQueueRef = useRef<string[]>([]); // Queue of base64 audio chunks
+    const pendingAudioRef = useRef<ArrayBuffer[]>([]);
     const isPlayingRef = useRef(false);
 
     // Ref to track state in callbacks without re-binding
@@ -157,10 +158,22 @@ export function useVoiceSession() {
             connection.on(LiveTranscriptionEvents.Open, () => {
                 addDebug("Deepgram Connection OPEN");
 
+                // Flush pending audio
+                if (pendingAudioRef.current.length > 0) {
+                    addDebug(`Flushing ${pendingAudioRef.current.length} buffered chunks...`);
+                    pendingAudioRef.current.forEach(chunk => {
+                        connection.send(chunk);
+                    });
+                    pendingAudioRef.current = [];
+                }
+
                 connection.on(LiveTranscriptionEvents.Close, (e) => {
                     // @ts-ignore
                     addDebug(`Deepgram Connection CLOSED (Code: ${e?.code}, Reason: ${e?.reason})`);
-                    setState("idle");
+                    // Stop recorder if socket dies to prevent spam
+                    if (stateRef.current !== "idle") {
+                        stopSession();
+                    }
                 });
 
                 connection.on(LiveTranscriptionEvents.Metadata, (data) => {
@@ -186,54 +199,36 @@ export function useVoiceSession() {
             });
 
             // 4. Get Microphone
-            addDebug("Requesting Microphone...");
-            // Force 1 channel for consistency
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    channelCount: 1,
-                    sampleRate: 16000,
-                    echoCancellation: true,
-                    noiseSuppression: true
-                }
-            });
+            addDebug("Requesting Microphone (Default Settings)...");
+            // Use defaults - safer for browser compatibility
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             addDebug("Microphone Acquired");
 
-            let mimeType = undefined;
-            // Prefer opus
-            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
-                mimeType = "audio/webm;codecs=opus";
-            } else if (MediaRecorder.isTypeSupported("audio/webm")) {
-                mimeType = "audio/webm";
-            } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
-                mimeType = "audio/mp4";
-            }
-            addDebug(`Using MimeType: ${mimeType || "default"}`);
-
-            const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+            // Let browser pick optimal mimeType
+            const mediaRecorder = new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
+            addDebug(`Using MimeType: ${mediaRecorder.mimeType}`);
 
             mediaRecorder.ondataavailable = async (event) => {
                 if (event.data.size > 0) {
+                    const buffer = await event.data.arrayBuffer();
                     if (deepgramRef.current?.getReadyState() === 1) {
-                        const buffer = await event.data.arrayBuffer();
-                        addDebug(`Sending ${event.data.size} bytes`);
+                        // Send immediately
                         deepgramRef.current.send(buffer);
                     } else {
-                        addDebug(`Socket not ready (State: ${deepgramRef.current?.getReadyState()})`);
+                        // Buffer it! Don't drop it.
+                        addDebug(`Buffering ${event.data.size} bytes (State: ${deepgramRef.current?.getReadyState()})`);
+                        pendingAudioRef.current.push(buffer);
                     }
                 }
             };
 
             mediaRecorder.onstart = () => addDebug("MediaRecorder: Start event fired");
+
             // KeepAlive mechanism
             const keepAliveInterval = setInterval(() => {
                 if (deepgramRef.current?.getReadyState() === 1) {
-                    // Sending a small JSON keepalive if supported, or just rely on audio
                     deepgramRef.current.keepAlive();
-                    // Note: SDK has keepAlive(), or we can just hope audio is enough.
-                    // Let's rely on audio + logging for now.
-                    // Actually, explicit KeepAlive might help if audio is silent.
-                    addDebug("KeepAlive check...");
                 }
             }, 3000);
 
@@ -242,7 +237,7 @@ export function useVoiceSession() {
                 clearInterval(keepAliveInterval);
             };
 
-            // Back to 250ms for lower latency
+            // 250ms chunks for balance of latency and header safety
             mediaRecorder.start(250);
             addDebug("MediaRecorder Started");
 
