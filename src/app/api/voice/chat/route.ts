@@ -2,17 +2,23 @@ import { createClient } from "@deepgram/sdk";
 import { OpenAI } from "openai";
 import { NextResponse } from "next/server";
 
+import { SCENARIOS } from "@/data/scenarios";
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(req: Request) {
     try {
-        const { message } = await req.json();
+        const { message, scenarioId } = await req.json();
 
         if (!message) {
             return NextResponse.json({ error: "Message required" }, { status: 400 });
         }
+
+        const scenario = SCENARIOS.find(s => s.id === scenarioId);
+        const systemPrompt = scenario?.systemPrompt ||
+            "You are a professional airline training instructor helping candidates improve spoken English. Keep your responses concise (1-2 sentences) and encouraging. You are talking over a voice interface, so be conversational.";
 
         // 1. Get AI Response
         const completion = await openai.chat.completions.create({
@@ -20,8 +26,7 @@ export async function POST(req: Request) {
             messages: [
                 {
                     role: "system",
-                    content:
-                        "You are a professional airline training instructor helping candidates improve spoken English. Keep your responses concise (1-2 sentences) and encouraging. You are talking over a voice interface, so be conversational.",
+                    content: systemPrompt,
                 },
                 { role: "user", content: message },
             ],

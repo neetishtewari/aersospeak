@@ -1,15 +1,27 @@
 "use client";
 
+import { Scenario } from "@/data/scenarios";
 import { useVoiceSession } from "@/hooks/use-voice-session";
 import { Button } from "@/components/ui/button";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function VoiceControl() {
-    const { state, transcript, error, startSession, stopSession, debugInfo } = useVoiceSession();
+interface VoiceControlProps {
+    scenario: Scenario;
+}
+
+export function VoiceControl({ scenario }: VoiceControlProps) {
+    const { state, transcript, error, startSession, stopSession, debugInfo } = useVoiceSession({ scenario });
 
     return (
         <div className="flex flex-col items-center gap-6 w-full max-w-md">
+            <div className="flex flex-col items-center gap-2">
+                <span className="text-xs font-medium uppercase tracking-wider text-sky-400">
+                    Current Mode
+                </span>
+                <h2 className="text-xl font-bold text-white">{scenario.name}</h2>
+            </div>
+
             <div className="h-48 w-full rounded-xl border bg-card p-4 shadow overflow-y-auto">
                 {transcript ? (
                     <p className="text-lg leading-relaxed">{transcript}</p>

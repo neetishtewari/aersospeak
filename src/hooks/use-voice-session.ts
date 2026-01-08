@@ -7,9 +7,14 @@ import {
     LiveTranscriptionEvents,
 } from "@deepgram/sdk";
 
+import { Scenario } from "@/data/scenarios";
 export type VoiceSessionState = "idle" | "listening" | "processing" | "speaking";
 
-export function useVoiceSession() {
+interface UseVoiceSessionProps {
+    scenario: Scenario;
+}
+
+export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
     const [state, setState] = useState<VoiceSessionState>("idle");
     const [transcript, setTranscript] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -104,7 +109,10 @@ export function useVoiceSession() {
         try {
             const res = await fetch("/api/voice/chat", {
                 method: "POST",
-                body: JSON.stringify({ message: text }),
+                body: JSON.stringify({
+                    message: text,
+                    scenarioId: scenario.id
+                }),
             });
 
             if (!res.ok) throw new Error("Chat processing failed");
