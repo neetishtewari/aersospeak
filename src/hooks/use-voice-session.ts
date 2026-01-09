@@ -175,7 +175,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 language: "en-US",
                 smart_format: true,
                 interim_results: true,
-                utterance_end_ms: 2000,
+                utterance_end_ms: 4000,
                 vad_events: true,
             });
             deepgramRef.current = connection;
