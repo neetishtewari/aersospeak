@@ -10,7 +10,7 @@ export default function Home() {
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 to-black">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-neutral-950 to-black text-white">
       <main className="flex flex-col items-center gap-8 text-center px-4 w-full">
         <div className="space-y-2">
           <h1 className="text-4xl font-bold tracking-tighter sm:text-5xl md:text-6xl text-white">

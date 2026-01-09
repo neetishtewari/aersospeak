@@ -20,48 +20,59 @@ const ICON_MAP: Record<string, any> = {
     Brain
 };
 
+import { motion } from "framer-motion";
+
 export function PracticeModeSelector({ onSelect }: PracticeModeSelectorProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mx-auto p-4">
-            {SCENARIOS.map((scenario) => {
+            {SCENARIOS.map((scenario, index) => {
                 const Icon = ICON_MAP[scenario.icon] || Brain;
 
                 return (
-                    <div
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
                         key={scenario.id}
                         onClick={() => onSelect(scenario)}
                         className={cn(
-                            "group cursor-pointer rounded-xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm transition-all hover:bg-white/10 hover:border-sky-500/50 hover:shadow-lg hover:shadow-sky-500/10",
-                            "flex flex-col gap-4 text-left"
+                            "group cursor-pointer relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 to-white/[0.02] p-6 backdrop-blur-xl transition-all duration-300",
+                            "hover:border-sky-500/30 hover:shadow-2xl hover:shadow-sky-500/20 hover:-translate-y-1"
                         )}
                     >
-                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400 ring-1 ring-inset ring-sky-500/20 transition-all group-hover:bg-sky-500 group-hover:text-white">
-                            <Icon className="h-6 w-6" />
-                        </div>
+                        {/* Hover Gradient Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-                        <div>
-                            <h3 className="text-lg font-semibold text-white mb-1">
-                                {scenario.name}
-                            </h3>
-                            <p className="text-sm text-gray-400 leading-relaxed">
-                                {scenario.description}
-                            </p>
-                        </div>
+                        <div className="relative z-10 flex flex-col gap-4 text-left">
+                            <div className="flex justify-between items-start">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500/20 to-blue-600/20 text-sky-400 ring-1 ring-inset ring-white/10 transition-all duration-300 group-hover:scale-110 group-hover:bg-sky-500 group-hover:text-white group-hover:ring-sky-500">
+                                    <Icon className="h-7 w-7" />
+                                </div>
+                                <span className={cn(
+                                    "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border",
+                                    scenario.difficulty === 'Easy' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                                    scenario.difficulty === 'Medium' && "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                                    scenario.difficulty === 'Hard' && "bg-rose-500/10 text-rose-400 border-rose-500/20",
+                                )}>
+                                    {scenario.difficulty}
+                                </span>
+                            </div>
 
-                        <div className="mt-auto pt-4 flex items-center justify-between border-t border-white/5">
-                            <span className={cn(
-                                "text-xs font-medium px-2 py-1 rounded-full",
-                                scenario.difficulty === 'Easy' && "bg-green-500/10 text-green-400",
-                                scenario.difficulty === 'Medium' && "bg-yellow-500/10 text-yellow-400",
-                                scenario.difficulty === 'Hard' && "bg-red-500/10 text-red-400",
-                            )}>
-                                {scenario.difficulty}
-                            </span>
-                            <span className="text-xs text-sky-400 opacity-0 transition-opacity group-hover:opacity-100 font-medium">
-                                Start Session →
-                            </span>
+                            <div>
+                                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-sky-300 transition-colors">
+                                    {scenario.name}
+                                </h3>
+                                <p className="text-sm text-slate-400 leading-relaxed font-light">
+                                    {scenario.description}
+                                </p>
+                            </div>
+
+                            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-sky-400 opacity-0 transform translate-x-[-10px] transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                                <span>Start Simulation</span>
+                                <span className="text-lg leading-none">→</span>
+                            </div>
                         </div>
-                    </div>
+                    </motion.div>
                 );
             })}
         </div>
