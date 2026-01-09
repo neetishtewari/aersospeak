@@ -190,178 +190,177 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 vad_events: true,
             });
             addDebug(`VAD Timeout set to: ${scenario.silenceTimeoutMs || 2000}ms`);
-        });
-    deepgramRef.current = connection;
+            deepgramRef.current = connection;
 
-    // 3. Setup Events
-    connection.on(LiveTranscriptionEvents.Open, async () => {
-        addDebug("Deepgram Connection OPEN");
+            // 3. Setup Events
+            connection.on(LiveTranscriptionEvents.Open, async () => {
+                addDebug("Deepgram Connection OPEN");
 
-        // Play Initial Greeting if exists
-        if (scenario.initialMessage) {
-            addDebug("Requesting Initial Greeting...");
-            try {
-                const res = await fetch("/api/voice/chat", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        message: scenario.initialMessage,
-                        ttsOnly: true,
-                        scenarioId: scenario.id
-                    }),
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    audioQueueRef.current.push(data.audio);
-                    processAudioQueue();
+                // Play Initial Greeting if exists
+                if (scenario.initialMessage) {
+                    addDebug("Requesting Initial Greeting...");
+                    try {
+                        const res = await fetch("/api/voice/chat", {
+                            method: "POST",
+                            body: JSON.stringify({
+                                message: scenario.initialMessage,
+                                ttsOnly: true,
+                                scenarioId: scenario.id
+                            }),
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            audioQueueRef.current.push(data.audio);
+                            processAudioQueue();
 
-                    // Add greeting to history so AI remembers it said it
-                    historyRef.current.push({ role: "assistant", content: scenario.initialMessage });
+                            // Add greeting to history so AI remembers it said it
+                            historyRef.current.push({ role: "assistant", content: scenario.initialMessage });
+                        }
+                    } catch (e) {
+                        console.error("Failed to play greeting", e);
+                    }
                 }
-            } catch (e) {
-                console.error("Failed to play greeting", e);
-            }
-        }
 
-        // Flush pending audio
-        if (pendingAudioRef.current.length > 0) {
-            addDebug(`Flushing ${pendingAudioRef.current.length} buffered chunks...`);
-            pendingAudioRef.current.forEach(chunk => {
-                connection.send(chunk);
+                // Flush pending audio
+                if (pendingAudioRef.current.length > 0) {
+                    addDebug(`Flushing ${pendingAudioRef.current.length} buffered chunks...`);
+                    pendingAudioRef.current.forEach(chunk => {
+                        connection.send(chunk);
+                    });
+                    pendingAudioRef.current = [];
+                }
+
+                connection.on(LiveTranscriptionEvents.Close, (e) => {
+                    // @ts-ignore
+                    addDebug(`Deepgram Connection CLOSED (Code: ${e?.code}, Reason: ${e?.reason})`);
+                    // Stop recorder if socket dies to prevent spam
+                    if (stateRef.current !== "idle") {
+                        stopSession();
+                    }
+                });
+
+                connection.on(LiveTranscriptionEvents.Metadata, (data) => {
+                    addDebug(`Metadata received: ${JSON.stringify(data)}`);
+                });
+
+                connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+                    const trans = data.channel.alternatives[0].transcript;
+                    if (trans && data.is_final) {
+                        addDebug(`Transcript: "${trans}"`);
+                        if (stateRef.current === "listening") {
+                            setTranscript((prev) => prev + " " + trans);
+
+                            // Only auto-process if NOT in manual mode
+                            if (!scenario.manualEndpointing) {
+                                handleProcessing(trans);
+                            }
+                        }
+                    }
+                });
+
+                connection.on(LiveTranscriptionEvents.Error, (err) => {
+                    console.error("Deepgram error", err);
+                    addDebug(`Deepgram Error: ${err.message}`);
+                    setError("Voice connection error");
+                });
             });
-            pendingAudioRef.current = [];
+
+            // 4. Get Microphone
+            addDebug("Requesting Microphone (Default Settings)...");
+            // Use defaults - safer for browser compatibility
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            addDebug("Microphone Acquired");
+
+            // Let browser pick optimal mimeType
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            addDebug(`Using MimeType: ${mediaRecorder.mimeType}`);
+
+            mediaRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0) {
+                    const buffer = await event.data.arrayBuffer();
+                    if (deepgramRef.current?.getReadyState() === 1) {
+                        // Send immediately
+                        deepgramRef.current.send(buffer);
+                    } else {
+                        // Buffer it! Don't drop it.
+                        addDebug(`Buffering ${event.data.size} bytes (State: ${deepgramRef.current?.getReadyState()})`);
+                        pendingAudioRef.current.push(buffer);
+                    }
+                }
+            };
+
+            mediaRecorder.onstart = () => addDebug("MediaRecorder: Start event fired");
+
+            // KeepAlive mechanism
+            const keepAliveInterval = setInterval(() => {
+                if (deepgramRef.current?.getReadyState() === 1) {
+                    deepgramRef.current.keepAlive();
+                }
+            }, 3000);
+
+            mediaRecorder.onstop = () => {
+                addDebug("MediaRecorder: Stop event fired");
+                clearInterval(keepAliveInterval);
+            };
+
+            // 250ms chunks for balance of latency and header safety
+            mediaRecorder.start(250);
+            addDebug("MediaRecorder Started");
+
+        } catch (err: any) {
+            console.error(err);
+            addDebug(`Error: ${err.message}`);
+            setError(err.message || "Failed to start voice session");
+            setState("idle");
+        }
+    }, [handleProcessing, addDebug, scenario]);
+
+    const stopSession = useCallback(() => {
+        addDebug("Stopping session...");
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+            mediaRecorderRef.current = null;
         }
 
-        connection.on(LiveTranscriptionEvents.Close, (e) => {
-            // @ts-ignore
-            addDebug(`Deepgram Connection CLOSED (Code: ${e?.code}, Reason: ${e?.reason})`);
-            // Stop recorder if socket dies to prevent spam
+        if (deepgramRef.current) {
+            deepgramRef.current.finish();
+            deepgramRef.current = null;
+        }
+
+        if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+        }
+
+        setState("idle");
+        addDebug("Session Stopped");
+    }, [addDebug]);
+
+    const completeTurn = useCallback(() => {
+        if (!transcript) return;
+        addDebug("Manual Turn Completion");
+        handleProcessing(transcript);
+    }, [transcript, handleProcessing, addDebug]);
+
+    useEffect(() => {
+        return () => {
+            // Cleanup on unmount
             if (stateRef.current !== "idle") {
                 stopSession();
             }
-        });
+        };
+    }, [stopSession]);
 
-        connection.on(LiveTranscriptionEvents.Metadata, (data) => {
-            addDebug(`Metadata received: ${JSON.stringify(data)}`);
-        });
-
-        connection.on(LiveTranscriptionEvents.Transcript, (data) => {
-            const trans = data.channel.alternatives[0].transcript;
-            if (trans && data.is_final) {
-                addDebug(`Transcript: "${trans}"`);
-                if (stateRef.current === "listening") {
-                    setTranscript((prev) => prev + " " + trans);
-
-                    // Only auto-process if NOT in manual mode
-                    if (!scenario.manualEndpointing) {
-                        handleProcessing(trans);
-                    }
-                }
-            }
-        });
-
-        connection.on(LiveTranscriptionEvents.Error, (err) => {
-            console.error("Deepgram error", err);
-            addDebug(`Deepgram Error: ${err.message}`);
-            setError("Voice connection error");
-        });
-    });
-
-    // 4. Get Microphone
-    addDebug("Requesting Microphone (Default Settings)...");
-    // Use defaults - safer for browser compatibility
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    addDebug("Microphone Acquired");
-
-    // Let browser pick optimal mimeType
-    const mediaRecorder = new MediaRecorder(stream);
-    mediaRecorderRef.current = mediaRecorder;
-    addDebug(`Using MimeType: ${mediaRecorder.mimeType}`);
-
-    mediaRecorder.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
-            const buffer = await event.data.arrayBuffer();
-            if (deepgramRef.current?.getReadyState() === 1) {
-                // Send immediately
-                deepgramRef.current.send(buffer);
-            } else {
-                // Buffer it! Don't drop it.
-                addDebug(`Buffering ${event.data.size} bytes (State: ${deepgramRef.current?.getReadyState()})`);
-                pendingAudioRef.current.push(buffer);
-            }
-        }
+    return {
+        state,
+        transcript,
+        lastFeedback,
+        error,
+        startSession,
+        stopSession,
+        completeTurn,
+        debugInfo
     };
-
-    mediaRecorder.onstart = () => addDebug("MediaRecorder: Start event fired");
-
-    // KeepAlive mechanism
-    const keepAliveInterval = setInterval(() => {
-        if (deepgramRef.current?.getReadyState() === 1) {
-            deepgramRef.current.keepAlive();
-        }
-    }, 3000);
-
-    mediaRecorder.onstop = () => {
-        addDebug("MediaRecorder: Stop event fired");
-        clearInterval(keepAliveInterval);
-    };
-
-    // 250ms chunks for balance of latency and header safety
-    mediaRecorder.start(250);
-    addDebug("MediaRecorder Started");
-
-} catch (err: any) {
-    console.error(err);
-    addDebug(`Error: ${err.message}`);
-    setError(err.message || "Failed to start voice session");
-    setState("idle");
-}
-    }, [handleProcessing, addDebug, scenario]);
-
-const stopSession = useCallback(() => {
-    addDebug("Stopping session...");
-    if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
-        mediaRecorderRef.current = null;
-    }
-
-    if (deepgramRef.current) {
-        deepgramRef.current.finish();
-        deepgramRef.current = null;
-    }
-
-    if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-    }
-
-    setState("idle");
-    addDebug("Session Stopped");
-}, [addDebug]);
-
-const completeTurn = useCallback(() => {
-    if (!transcript) return;
-    addDebug("Manual Turn Completion");
-    handleProcessing(transcript);
-}, [transcript, handleProcessing, addDebug]);
-
-useEffect(() => {
-    return () => {
-        // Cleanup on unmount
-        if (stateRef.current !== "idle") {
-            stopSession();
-        }
-    };
-}, [stopSession]);
-
-return {
-    state,
-    transcript,
-    lastFeedback,
-    error,
-    startSession,
-    stopSession,
-    completeTurn,
-    debugInfo
-};
 }
