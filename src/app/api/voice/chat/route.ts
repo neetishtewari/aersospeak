@@ -25,9 +25,16 @@ export async function POST(req: Request) {
                 const systemPrompt = scenario?.systemPrompt ||
                     "You are a professional airline training instructor helping candidates improve spoken English. Keep your responses concise (1-2 sentences) and encouraging. You are talking over a voice interface, so be conversational.";
 
+                // Debug History
+                console.log(`[Chat API] Scenario: ${scenarioId}, History Length: ${history.length}`);
+                if (history.length > 0) {
+                    console.log(`[Chat API] Last User Msg: ${message}`);
+                }
+
                 // 1. Get AI Response
                 const completion = await openai.chat.completions.create({
                     model: "gpt-4o-mini",
+                    temperature: 0.6, // Slightly lower to enforce instructions
                     response_format: { type: "json_object" },
                     messages: [
                         {
@@ -36,7 +43,7 @@ export async function POST(req: Request) {
                         
                         CRITICAL: You must return a valid JSON object with the following structure:
                         {
-                          "reply": "The spoken response to the user",
+                          "reply": "The spoken response to the user. MUST END WITH A QUESTION.",
                           "feedback": {
                             "score": 0-100 (integer, be strict based on aviation standards),
                             "pronunciation": "Good" | "Fair" | "Poor" (one word only),
