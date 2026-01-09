@@ -189,6 +189,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 utterance_end_ms: scenario.silenceTimeoutMs || 2000,
                 vad_events: true,
             });
+            addDebug(`VAD Timeout set to: ${scenario.silenceTimeoutMs || 2000}ms`);
             deepgramRef.current = connection;
 
             // 3. Setup Events
@@ -288,53 +289,54 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             setError(err.message || "Failed to start voice session");
             setState("idle");
         }
-    }, [handleProcessing, addDebug]);
+    }
+    }, [handleProcessing, addDebug, scenario]);
 
-    const stopSession = useCallback(() => {
-        addDebug("Stopping session...");
-        if (mediaRecorderRef.current) {
-            mediaRecorderRef.current.stop();
-            mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
-            mediaRecorderRef.current = null;
+const stopSession = useCallback(() => {
+    addDebug("Stopping session...");
+    if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+        mediaRecorderRef.current = null;
+    }
+
+    if (deepgramRef.current) {
+        deepgramRef.current.finish();
+        deepgramRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+    }
+
+    setState("idle");
+    addDebug("Session Stopped");
+}, [addDebug]);
+
+const completeTurn = useCallback(() => {
+    if (!transcript) return;
+    addDebug("Manual Turn Completion");
+    handleProcessing(transcript);
+}, [transcript, handleProcessing, addDebug]);
+
+useEffect(() => {
+    return () => {
+        // Cleanup on unmount
+        if (stateRef.current !== "idle") {
+            stopSession();
         }
-
-        if (deepgramRef.current) {
-            deepgramRef.current.finish();
-            deepgramRef.current = null;
-        }
-
-        if (audioContextRef.current) {
-            audioContextRef.current.close();
-            audioContextRef.current = null;
-        }
-
-        setState("idle");
-        addDebug("Session Stopped");
-    }, [addDebug]);
-
-    const completeTurn = useCallback(() => {
-        if (!transcript) return;
-        addDebug("Manual Turn Completion");
-        handleProcessing(transcript);
-    }, [transcript, handleProcessing, addDebug]);
-
-    useEffect(() => {
-        return () => {
-            // Cleanup on unmount
-            if (stateRef.current !== "idle") {
-                stopSession();
-            }
-        };
-    }, [stopSession]);
-
-    return {
-        state,
-        transcript,
-        lastFeedback,
-        error,
-        startSession,
-        stopSession,
-        completeTurn,
-        debugInfo
     };
+}, [stopSession]);
+
+return {
+    state,
+    transcript,
+    lastFeedback,
+    error,
+    startSession,
+    stopSession,
+    completeTurn,
+    debugInfo
+};
 }
