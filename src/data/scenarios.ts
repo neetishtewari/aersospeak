@@ -8,6 +8,7 @@ export interface Scenario {
     difficulty: 'Easy' | 'Medium' | 'Hard';
     systemPrompt: string;
     initialMessage: string;
+    manualEndpointing?: boolean;
 }
 
 export const SCENARIOS: Scenario[] = [
@@ -17,6 +18,7 @@ export const SCENARIOS: Scenario[] = [
         description: 'Practice the pre-flight safety demonstration announcement.',
         icon: 'Megaphone',
         difficulty: 'Easy',
+        manualEndpointing: true,
         systemPrompt: `You are an expert aviation elocution coach. 
     The user is a flight attendant trainee practicing the pre-flight safety announcement.
     Your goal is to listen to their announcement and provide specific feedback on clarity, pace, pronunciation, and authority.

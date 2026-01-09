@@ -212,7 +212,11 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                         addDebug(`Transcript: "${trans}"`);
                         if (stateRef.current === "listening") {
                             setTranscript((prev) => prev + " " + trans);
-                            handleProcessing(trans);
+
+                            // Only auto-process if NOT in manual mode
+                            if (!scenario.manualEndpointing) {
+                                handleProcessing(trans);
+                            }
                         }
                     }
                 });
@@ -297,6 +301,12 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
         addDebug("Session Stopped");
     }, [addDebug]);
 
+    const completeTurn = useCallback(() => {
+        if (!transcript) return;
+        addDebug("Manual Turn Completion");
+        handleProcessing(transcript);
+    }, [transcript, handleProcessing, addDebug]);
+
     useEffect(() => {
         return () => {
             // Cleanup on unmount
@@ -313,6 +323,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
         error,
         startSession,
         stopSession,
+        completeTurn,
         debugInfo
     };
 }
