@@ -26,6 +26,16 @@ export function VoiceControl({ scenario }: VoiceControlProps) {
                 <h2 className="text-xl font-bold text-white tracking-tight">{scenario.name}</h2>
             </div>
 
+            {/* Hint / Guide */}
+            {scenario.guide && (
+                <div className="bg-white/5 border border-white/10 rounded-lg p-3 max-w-sm text-center">
+                    <p className="text-xs text-sky-200/80 font-medium mb-1 uppercase tracking-wide">Suggested Response</p>
+                    <p className="text-sm text-slate-300 italic">
+                        {scenario.guide}
+                    </p>
+                </div>
+            )}
+
             {/* Orb / Controls Area */}
             <div className="flex items-center justify-center min-h-[160px]">
                 {/* 1. Manual Mode: Listening State (Special Layout) */}
