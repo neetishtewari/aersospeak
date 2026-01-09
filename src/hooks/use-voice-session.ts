@@ -289,54 +289,53 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             setError(err.message || "Failed to start voice session");
             setState("idle");
         }
-    }
     }, [handleProcessing, addDebug, scenario]);
 
-const stopSession = useCallback(() => {
-    addDebug("Stopping session...");
-    if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
-        mediaRecorderRef.current = null;
-    }
-
-    if (deepgramRef.current) {
-        deepgramRef.current.finish();
-        deepgramRef.current = null;
-    }
-
-    if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-    }
-
-    setState("idle");
-    addDebug("Session Stopped");
-}, [addDebug]);
-
-const completeTurn = useCallback(() => {
-    if (!transcript) return;
-    addDebug("Manual Turn Completion");
-    handleProcessing(transcript);
-}, [transcript, handleProcessing, addDebug]);
-
-useEffect(() => {
-    return () => {
-        // Cleanup on unmount
-        if (stateRef.current !== "idle") {
-            stopSession();
+    const stopSession = useCallback(() => {
+        addDebug("Stopping session...");
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+            mediaRecorderRef.current = null;
         }
-    };
-}, [stopSession]);
 
-return {
-    state,
-    transcript,
-    lastFeedback,
-    error,
-    startSession,
-    stopSession,
-    completeTurn,
-    debugInfo
-};
+        if (deepgramRef.current) {
+            deepgramRef.current.finish();
+            deepgramRef.current = null;
+        }
+
+        if (audioContextRef.current) {
+            audioContextRef.current.close();
+            audioContextRef.current = null;
+        }
+
+        setState("idle");
+        addDebug("Session Stopped");
+    }, [addDebug]);
+
+    const completeTurn = useCallback(() => {
+        if (!transcript) return;
+        addDebug("Manual Turn Completion");
+        handleProcessing(transcript);
+    }, [transcript, handleProcessing, addDebug]);
+
+    useEffect(() => {
+        return () => {
+            // Cleanup on unmount
+            if (stateRef.current !== "idle") {
+                stopSession();
+            }
+        };
+    }, [stopSession]);
+
+    return {
+        state,
+        transcript,
+        lastFeedback,
+        error,
+        startSession,
+        stopSession,
+        completeTurn,
+        debugInfo
+    };
 }
