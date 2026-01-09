@@ -33,30 +33,31 @@ export async function POST(req: Request) {
 
                 // 1. Get AI Response
                 const completion = await openai.chat.completions.create({
-                    model: "gpt-4o-mini",
-                    temperature: 0.6, // Slightly lower to enforce instructions
+                    model: "gpt-4o", // Upgraded from mini for better adherence
+                    temperature: 0.8, // Increased slightly for more natural convo
                     response_format: { type: "json_object" },
                     messages: [
                         {
                             role: "system",
                             content: `${systemPrompt}
-                        
-                        CRITICAL: You must return a valid JSON object with the following structure:
-                        {
-                          "reply": "The spoken response to the user. MUST END WITH A QUESTION.",
-                          "feedback": {
-                            "score": 0-100 (integer, be strict based on aviation standards),
-                            "pronunciation": "Good" | "Fair" | "Poor" (one word only),
-                            "grammar_correction": "Corrected sentence if there was an error, otherwise null",
-                            "suggestion": "A concise tip for improvement (max 10 words)"
-                          }
-                        }
-                        `,
+                            
+                            OUTPUT FORMAT (JSON):
+                            {
+                              "reply": "Your spoken response. MUST END WITH A QUESTION.",
+                              "feedback": {
+                                "score": 0-100,
+                                "pronunciation": "Good" | "Fair" | "Poor",
+                                "grammar_correction": "text" | null,
+                                "suggestion": "text"
+                              }
+                            }
+                            `,
                         },
                         ...history,
                         { role: "user", content: message },
+                        { role: "system", content: "IMPORTANT: You are the interviewer. Do NOT repeat the user. Ask the next question now." }
                     ],
-                    max_tokens: 300,
+                    max_tokens: 350,
                 });
 
                 const rawContent = completion.choices[0].message.content;
