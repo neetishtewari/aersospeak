@@ -23,17 +23,34 @@ export async function POST(req: Request) {
         // 1. Get AI Response
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
             messages: [
                 {
                     role: "system",
-                    content: systemPrompt,
+                    content: `${systemPrompt}
+                    
+                    CRITICAL: You must return a valid JSON object with the following structure:
+                    {
+                      "reply": "The spoken response to the user",
+                      "feedback": {
+                        "score": 0-100 (integer, be strict based on aviation standards),
+                        "pronunciation": "Good" | "Fair" | "Poor" (one word only),
+                        "grammar_correction": "Corrected sentence if there was an error, otherwise null",
+                        "suggestion": "A concise tip for improvement (max 10 words)"
+                      }
+                    }
+                    `,
                 },
                 { role: "user", content: message },
             ],
-            max_tokens: 150,
+            max_tokens: 300,
         });
 
-        const aiText = completion.choices[0].message.content || "I didn't catch that.";
+        const rawContent = completion.choices[0].message.content;
+        if (!rawContent) throw new Error("No response from AI");
+
+        const aiResponse = JSON.parse(rawContent);
+        const aiText = aiResponse.reply;
 
         // 2. Generate Audio with Deepgram Aura
         const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
@@ -65,7 +82,8 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
             text: aiText,
-            audio: audioBase64
+            audio: audioBase64,
+            feedback: aiResponse.feedback
         });
 
     } catch (error: any) {

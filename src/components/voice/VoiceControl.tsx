@@ -6,15 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { FeedbackCard } from "./FeedbackCard";
+
 interface VoiceControlProps {
     scenario: Scenario;
 }
 
 export function VoiceControl({ scenario }: VoiceControlProps) {
-    const { state, transcript, error, startSession, stopSession, debugInfo } = useVoiceSession({ scenario });
+    const { state, transcript, error, startSession, stopSession, debugInfo, lastFeedback } = useVoiceSession({ scenario });
 
     return (
         <div className="flex flex-col items-center gap-6 w-full max-w-md">
+            {/* Header */}
             <div className="flex flex-col items-center gap-2">
                 <span className="text-xs font-medium uppercase tracking-wider text-sky-400">
                     Current Mode
@@ -22,6 +25,12 @@ export function VoiceControl({ scenario }: VoiceControlProps) {
                 <h2 className="text-xl font-bold text-white">{scenario.name}</h2>
             </div>
 
+            {/* Feedback Card (Shows if available) */}
+            {lastFeedback && state === "listening" && (
+                <FeedbackCard feedback={lastFeedback} />
+            )}
+
+            {/* Transcript Area */}
             <div className="h-48 w-full rounded-xl border bg-card p-4 shadow overflow-y-auto">
                 {transcript ? (
                     <p className="text-lg leading-relaxed">{transcript}</p>

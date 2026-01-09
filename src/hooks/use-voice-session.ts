@@ -8,7 +8,15 @@ import {
 } from "@deepgram/sdk";
 
 import { Scenario } from "@/data/scenarios";
+
 export type VoiceSessionState = "idle" | "listening" | "processing" | "speaking";
+
+export interface Feedback {
+    score: number;
+    pronunciation: string;
+    grammar_correction: string | null;
+    suggestion: string;
+}
 
 interface UseVoiceSessionProps {
     scenario: Scenario;
@@ -17,6 +25,7 @@ interface UseVoiceSessionProps {
 export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
     const [state, setState] = useState<VoiceSessionState>("idle");
     const [transcript, setTranscript] = useState("");
+    const [lastFeedback, setLastFeedback] = useState<Feedback | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
@@ -120,6 +129,10 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             const data = await res.json();
             addDebug("AI response received");
 
+            if (data.feedback) {
+                setLastFeedback(data.feedback);
+            }
+
             audioQueueRef.current.push(data.audio);
             processAudioQueue();
 
@@ -136,6 +149,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             setState("listening");
             setError(null);
             setTranscript("");
+            setLastFeedback(null);
             setDebugInfo([]);
             debugRef.current = [];
             audioQueueRef.current = [];
@@ -159,6 +173,10 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             const connection = deepgram.listen.live({
                 model: "nova-2",
                 language: "en-US",
+                smart_format: true,
+                interim_results: true,
+                utterance_end_ms: 1000,
+                vad_events: true,
             });
             deepgramRef.current = connection;
 
@@ -291,6 +309,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
     return {
         state,
         transcript,
+        lastFeedback,
         error,
         startSession,
         stopSession,
