@@ -196,38 +196,42 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             connection.on(LiveTranscriptionEvents.Open, async () => {
                 addDebug("Deepgram Connection OPEN");
 
-                // Play Initial Greeting if exists
-                if (scenario.initialMessage) {
-                    addDebug("Requesting Initial Greeting...");
-                    try {
-                        const res = await fetch("/api/voice/chat", {
-                            method: "POST",
-                            body: JSON.stringify({
-                                message: scenario.initialMessage,
-                                ttsOnly: true,
-                                scenarioId: scenario.id
-                            }),
-                        });
-                        if (res.ok) {
-                            const data = await res.json();
-                            audioQueueRef.current.push(data.audio);
-                            processAudioQueue();
-
-                            // Add greeting to history so AI remembers it said it
-                            historyRef.current.push({ role: "assistant", content: scenario.initialMessage });
-                        }
-                    } catch (e) {
-                        console.error("Failed to play greeting", e);
-                    }
-                }
-
-                // Flush pending audio
+                // 1. Flush pending audio IMMEDIATELY
                 if (pendingAudioRef.current.length > 0) {
                     addDebug(`Flushing ${pendingAudioRef.current.length} buffered chunks...`);
                     pendingAudioRef.current.forEach(chunk => {
                         connection.send(chunk);
                     });
                     pendingAudioRef.current = [];
+                }
+
+                // 2. Play Initial Greeting (Non-blocking)
+                if (scenario.initialMessage) {
+                    addDebug("Requesting Initial Greeting...");
+                    // Run independent of the socket maintenance
+                    (async () => {
+                        try {
+                            const res = await fetch("/api/voice/chat", {
+                                method: "POST",
+                                body: JSON.stringify({
+                                    message: scenario.initialMessage,
+                                    ttsOnly: true,
+                                    scenarioId: scenario.id
+                                }),
+                            });
+                            if (res.ok) {
+                                const data = await res.json();
+                                // Only queue if we are still live
+                                if (deepgramRef.current) {
+                                    audioQueueRef.current.push(data.audio);
+                                    processAudioQueue();
+                                    historyRef.current.push({ role: "assistant", content: scenario.initialMessage });
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Failed to play greeting", e);
+                        }
+                    })();
                 }
 
                 connection.on(LiveTranscriptionEvents.Close, (e) => {
