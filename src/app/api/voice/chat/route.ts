@@ -30,33 +30,64 @@ export async function POST(req: Request) {
                 console.log(`[Chat API] Last User Msg: ${message}`);
             }
 
+            // 1. Determine Phase (Assessment vs Interview) - 10 turns = 5 exchanges
+            const isAssessmentPhase = history.length >= 10;
+
+            const systemInstructions = isAssessmentPhase
+                ? `STOP ASKING QUESTIONS. The interview is over. You must now generate a FINAL ASSESSMENT based on the user's performance.
+                   Your "reply" should be a short closing statement (e.g., "Thank you, I've generated your feedback report below.").
+                   You MUST populate the "assessment" object.`
+                : systemPrompt;
+
+            const jsonStructure = isAssessmentPhase
+                ? `
+                   {
+                     "reply": "Short closing statement",
+                     "assessment": {
+                        "summary": "2-3 sentence overview of performance",
+                        "score": 0-100,
+                        "strengths": ["point 1", "point 2", "point 3"],
+                        "improvements": ["point 1", "point 2", "point 3"]
+                     },
+                     "feedback": null
+                   }
+                  `
+                : `
+                   {
+                      "reply": "Your spoken response. MUST END WITH A QUESTION.",
+                      "feedback": {
+                        "score": 0-100,
+                        "pronunciation": "Good" | "Fair" | "Poor",
+                        "grammar_correction": "text" | null,
+                        "suggestion": "text"
+                      }
+                   }
+                  `;
+
             // 1. Get AI Response
             const completion = await openai.chat.completions.create({
-                model: "gpt-4o", // Upgraded from mini for better adherence
-                temperature: 0.8, // Increased slightly for more natural convo
+                model: "gpt-4o",
+                temperature: 0.8,
                 response_format: { type: "json_object" },
                 messages: [
                     {
                         role: "system",
-                        content: `${systemPrompt}
+                        content: `${systemInstructions}
                         
                         OUTPUT FORMAT (JSON):
-                        {
-                          "reply": "Your spoken response. MUST END WITH A QUESTION.",
-                          "feedback": {
-                            "score": 0-100,
-                            "pronunciation": "Good" | "Fair" | "Poor",
-                            "grammar_correction": "text" | null,
-                            "suggestion": "text"
-                          }
-                        }
+                        ${jsonStructure}
                         `,
                     },
                     ...history,
                     { role: "user", content: message },
-                    { role: "system", content: "IMPORTANT: You are the interviewer. Do NOT repeat the user. Ask the next question now." }
+                    {
+                        role: "system",
+                        content: isAssessmentPhase
+                            ? "IMPORTANT: End the interview. Generate the assessment JSON."
+                            : "IMPORTANT: You are the interviewer. Do NOT repeat the user. Ask the next question now."
+                    }
                 ],
-                max_tokens: 350,
+                max_tokens: 500,
             });
 
             const rawContent = completion.choices[0].message.content;
@@ -97,7 +128,8 @@ export async function POST(req: Request) {
         return NextResponse.json({
             text: aiText,
             audio: audioBase64,
-            feedback: aiResponse.feedback
+            feedback: aiResponse.feedback,
+            assessment: aiResponse.assessment
         });
 
     } catch (error: any) {

@@ -8,13 +8,18 @@ import { cn } from "@/lib/utils";
 
 import { FeedbackCard } from "./FeedbackCard";
 import { VoiceOrb } from "./VoiceOrb";
+import { AssessmentCard } from "./AssessmentCard";
 
 interface VoiceControlProps {
     scenario: Scenario;
 }
 
 export function VoiceControl({ scenario }: VoiceControlProps) {
-    const { state, transcript, error, startSession, stopSession, completeTurn, debugInfo, lastFeedback } = useVoiceSession({ scenario });
+    const { state, transcript, error, startSession, stopSession, completeTurn, debugInfo, lastFeedback, assessment } = useVoiceSession({ scenario });
+
+    if (assessment) {
+        return <AssessmentCard assessment={assessment} onRestart={() => window.location.reload()} />;
+    }
 
     return (
         <div className="flex flex-col items-center gap-6 w-full max-w-md">
