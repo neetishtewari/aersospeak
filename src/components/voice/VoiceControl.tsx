@@ -7,6 +7,7 @@ import { Mic, Square, Loader2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { FeedbackCard } from "./FeedbackCard";
+import { VoiceOrb } from "./VoiceOrb";
 
 interface VoiceControlProps {
     scenario: Scenario;
@@ -22,7 +23,35 @@ export function VoiceControl({ scenario }: VoiceControlProps) {
                 <span className="text-xs font-medium uppercase tracking-wider text-sky-400">
                     Current Mode
                 </span>
-                <h2 className="text-xl font-bold text-white">{scenario.name}</h2>
+                <h2 className="text-xl font-bold text-white tracking-tight">{scenario.name}</h2>
+            </div>
+
+            {/* Orb / Controls Area */}
+            <div className="flex items-center justify-center min-h-[160px]">
+                {/* 1. Manual Mode: Listening State (Special Layout) */}
+                {scenario.manualEndpointing && state === "listening" ? (
+                    <div className="flex flex-col items-center gap-6 animate-in zoom-in duration-300">
+                        <Button
+                            size="lg"
+                            className="rounded-full w-24 h-24 bg-green-500 hover:bg-green-400 shadow-[0_0_40px_-5px_rgba(74,222,128,0.4)] transition-all hover:scale-105"
+                            onClick={completeTurn}
+                        >
+                            <Check className="h-10 w-10 text-white stroke-[3px]" />
+                        </Button>
+                        <button
+                            onClick={stopSession}
+                            className="text-white/40 text-xs font-medium hover:text-white transition-colors"
+                        >
+                            Cancel Session
+                        </button>
+                    </div>
+                ) : (
+                    /* 2. Standard Mode & Idle/Processing State (Voice Orb) */
+                    <VoiceOrb
+                        state={state}
+                        onClick={state === "idle" ? startSession : stopSession}
+                    />
+                )}
             </div>
 
             {/* Feedback Card (Shows if available) */}
@@ -31,76 +60,30 @@ export function VoiceControl({ scenario }: VoiceControlProps) {
             )}
 
             {/* Transcript Area */}
-            <div className="h-48 w-full rounded-xl border bg-card p-4 shadow overflow-y-auto">
+            <div className="h-48 w-full rounded-xl border border-white/5 bg-black/20 backdrop-blur-sm p-4 shadow-inner overflow-y-auto">
                 {transcript ? (
-                    <p className="text-lg leading-relaxed">{transcript}</p>
+                    <p className="text-lg leading-relaxed text-slate-100">{transcript}</p>
                 ) : (
-                    <p className="text-muted-foreground italic text-center text-sm pt-8">
-                        {state === "listening" ? "Listening..." : "Press start to speak"}
+                    <p className="text-white/30 italic text-center text-sm pt-8">
+                        {state === "listening" ? "Listening..." : "Tap the orb to start"}
                     </p>
                 )}
             </div>
 
             {error && (
-                <p className="text-destructive text-sm font-medium">{error}</p>
+                <p className="text-red-400 text-sm font-medium">{error}</p>
             )}
 
-            <div className="flex gap-4">
-                {state === "idle" ? (
-                    <Button
-                        size="lg"
-                        className="rounded-full w-16 h-16 bg-sky-500 hover:bg-sky-400"
-                        onClick={startSession}
-                    >
-                        <Mic className="h-6 w-6" />
-                    </Button>
-                ) : (
-                    <>
-                        {/* Show Done button only for manual endpointing scenarios when listening */}
-                        {scenario.manualEndpointing && state === "listening" ? (
-                            <div className="flex flex-col items-center gap-4">
-                                <Button
-                                    size="lg"
-                                    className="rounded-full w-20 h-20 bg-green-500 hover:bg-green-400 shadow-lg shadow-green-500/20 animate-in zoom-in duration-300"
-                                    onClick={completeTurn}
-                                >
-                                    <Check className="h-10 w-10 text-white" />
-                                </Button>
-                                <button
-                                    onClick={stopSession}
-                                    className="text-white/50 text-xs hover:text-white transition-colors"
-                                >
-                                    Cancel Session
-                                </button>
-                            </div>
-                        ) : (
-                            <Button
-                                size="lg"
-                                variant="destructive"
-                                className="rounded-full w-16 h-16"
-                                onClick={stopSession}
-                            >
-                                {state === "processing" ? (
-                                    <Loader2 className="h-6 w-6 animate-spin" />
-                                ) : (
-                                    <Square className="h-6 w-6" />
-                                )}
-                            </Button>
-                        )}
-                    </>
-                )}
-            </div>
-
-            <div className="flex gap-2 text-xs text-muted-foreground uppercase tracking-widest">
-                <span className={cn("transition-colors", state === "listening" && "text-primary font-bold")}>
+            <div className="flex gap-2 text-[10px] text-white/30 uppercase tracking-widest font-medium">
+                <span className={cn("transition-colors", state === "listening" && "text-sky-400")}>
                     Listening
                 </span>
                 <span>•</span>
-                <span className={cn("transition-colors", state === "processing" && "text-primary font-bold")}>
+                <span className={cn("transition-colors", state === "processing" && "text-sky-400")}>
                     Processing
                 </span>
                 <span>•</span>
-                <span className={cn("transition-colors", state === "speaking" && "text-primary font-bold")}>
+                <span className={cn("transition-colors", state === "speaking" && "text-sky-400")}>
                     Speaking
                 </span>
             </div>
