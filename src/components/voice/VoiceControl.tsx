@@ -57,28 +57,36 @@ export function VoiceControl({ scenario }: VoiceControlProps) {
                 ) : (
                     <>
                         {/* Show Done button only for manual endpointing scenarios when listening */}
-                        {scenario.manualEndpointing && state === "listening" && (
+                        {scenario.manualEndpointing && state === "listening" ? (
+                            <div className="flex flex-col items-center gap-4">
+                                <Button
+                                    size="lg"
+                                    className="rounded-full w-20 h-20 bg-green-500 hover:bg-green-400 shadow-lg shadow-green-500/20 animate-in zoom-in duration-300"
+                                    onClick={completeTurn}
+                                >
+                                    <Check className="h-10 w-10 text-white" />
+                                </Button>
+                                <button
+                                    onClick={stopSession}
+                                    className="text-white/50 text-xs hover:text-white transition-colors"
+                                >
+                                    Cancel Session
+                                </button>
+                            </div>
+                        ) : (
                             <Button
                                 size="lg"
-                                className="rounded-full w-16 h-16 bg-green-500 hover:bg-green-400"
-                                onClick={completeTurn}
+                                variant="destructive"
+                                className="rounded-full w-16 h-16"
+                                onClick={stopSession}
                             >
-                                <Check className="h-8 w-8" />
+                                {state === "processing" ? (
+                                    <Loader2 className="h-6 w-6 animate-spin" />
+                                ) : (
+                                    <Square className="h-6 w-6" />
+                                )}
                             </Button>
                         )}
-
-                        <Button
-                            size="lg"
-                            variant="destructive"
-                            className="rounded-full w-16 h-16"
-                            onClick={stopSession}
-                        >
-                            {state === "processing" ? (
-                                <Loader2 className="h-6 w-6 animate-spin" />
-                            ) : (
-                                <Square className="h-6 w-6" />
-                            )}
-                        </Button>
                     </>
                 )}
             </div>
