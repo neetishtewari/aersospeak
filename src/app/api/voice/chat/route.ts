@@ -10,7 +10,7 @@ const openai = new OpenAI({
 
 export async function POST(req: Request) {
     try {
-        const { message, scenarioId } = await req.json();
+        const { message, history = [], scenarioId } = await req.json();
 
         if (!message) {
             return NextResponse.json({ error: "Message required" }, { status: 400 });
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
                     }
                     `,
                 },
+                ...history,
                 { role: "user", content: message },
             ],
             max_tokens: 300,

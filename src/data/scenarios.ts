@@ -53,6 +53,7 @@ export const SCENARIOS: Scenario[] = [
         description: 'Answer common HR questions for a cabin crew position.',
         icon: 'Briefcase',
         difficulty: 'Medium',
+        manualEndpointing: true,
         systemPrompt: `You are a senior recruiter for a major international airline.
     You are conducting an interview with a candidate (the user) for a cabin crew position.
     

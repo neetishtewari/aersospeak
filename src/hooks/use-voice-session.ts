@@ -45,6 +45,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
     const audioContextRef = useRef<AudioContext | null>(null);
     const audioQueueRef = useRef<string[]>([]); // Queue of base64 audio chunks
     const pendingAudioRef = useRef<ArrayBuffer[]>([]);
+    const historyRef = useRef<{ role: string; content: string }[]>([]);
     const isPlayingRef = useRef(false);
 
     // Ref to track state in callbacks without re-binding
@@ -116,10 +117,14 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
         addDebug("Processing with AI...");
 
         try {
+            // 1. Prepare history to send (exclude current message which is sent separately)
+            const history = historyRef.current;
+
             const res = await fetch("/api/voice/chat", {
                 method: "POST",
                 body: JSON.stringify({
                     message: text,
+                    history: history,
                     scenarioId: scenario.id
                 }),
             });
@@ -128,6 +133,10 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
             const data = await res.json();
             addDebug("AI response received");
+
+            // 2. Update History
+            historyRef.current.push({ role: "user", content: text });
+            historyRef.current.push({ role: "assistant", content: data.text });
 
             if (data.feedback) {
                 setLastFeedback(data.feedback);
@@ -151,8 +160,10 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             setTranscript("");
             setLastFeedback(null);
             setDebugInfo([]);
+            setDebugInfo([]);
             debugRef.current = [];
             audioQueueRef.current = [];
+            historyRef.current = [];
 
             addDebug("Starting session...");
 
