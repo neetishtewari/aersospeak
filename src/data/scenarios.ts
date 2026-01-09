@@ -10,6 +10,7 @@ export interface Scenario {
     initialMessage: string;
     manualEndpointing?: boolean;
     guide?: string;
+    silenceTimeoutMs?: number;
 }
 
 export const SCENARIOS: Scenario[] = [
@@ -20,6 +21,8 @@ export const SCENARIOS: Scenario[] = [
         icon: 'Megaphone',
         difficulty: 'Easy',
         manualEndpointing: true,
+        // Manual mode ignores this, but good default
+        silenceTimeoutMs: 5000,
         systemPrompt: `You are an expert aviation elocution coach. 
     The user is a flight attendant trainee practicing the pre-flight safety announcement.
     Your goal is to listen to their announcement and provide specific feedback on clarity, pace, pronunciation, and authority.
@@ -34,6 +37,7 @@ export const SCENARIOS: Scenario[] = [
         description: 'De-escalate a situation with a passenger who has had too much to drink.',
         icon: 'Martini',
         difficulty: 'Hard',
+        silenceTimeoutMs: 1200, // Quick responses for argument
         systemPrompt: `You are roleplaying as a passenger on a flight who has had too much to drink.
     You are loud, slightly slurred in speech, and demanding another drink.
     You are not violent, but you are persistent and annoying.
@@ -53,7 +57,8 @@ export const SCENARIOS: Scenario[] = [
         description: 'Answer common HR questions for a cabin crew position.',
         icon: 'Briefcase',
         difficulty: 'Medium',
-        manualEndpointing: true,
+        // Manual mode OFF, but long silence timeout
+        silenceTimeoutMs: 4000,
         systemPrompt: `You are a senior recruiter for a major international airline.
     You are conducting an interview with a candidate (the user) for a cabin crew position.
     
