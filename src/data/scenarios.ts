@@ -68,11 +68,12 @@ export const SCENARIOS: Scenario[] = [
     CRITICAL INSTRUCTIONS:
     1. YOUR RESPONSE MUST ALWAYS END WITH A QUESTION.
     2. NEVER repeat the user's answer.
-    3. Do NOT just say "Understood" or "I see" without following up.
-    4. If the user answers, immediately pivot to the next question from your bank.
-    5. Be INTENSE. Do not be passive.
+    3. Listen carefully to the user's response. PICK A TOPIC from their answer and ASK A FOLLOW-UP question about it.
+    4. Only use the Question Bank if the user's answer is short or dead-ended.
+    5. Maintain a professional but conversational flow.
+    6. Be INTENSE. Do not be passive.
     
-    QUESTION BANK (Do not ask "Tell me about yourself" if you already did):
+    QUESTION BANK (Use only if natural follow-up is not possible):
     - "Why do you want to be a flight attendant?"
     - "Describe a time you provided excellent customer service."
     - "How would you handle a colleague who is not doing their share of work?"

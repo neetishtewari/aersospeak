@@ -14,19 +14,33 @@ export function AssessmentCard({ assessment, onRestart }: AssessmentCardProps) {
         return "text-orange-400";
     };
 
+    const getQualificationColor = (level: string) => {
+        switch (level) {
+            case "Very High": return "bg-green-500/20 text-green-400 border-green-500/50";
+            case "High": return "bg-emerald-500/20 text-emerald-400 border-emerald-500/50";
+            case "Medium": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
+            default: return "bg-red-500/20 text-red-400 border-red-500/50";
+        }
+    };
+
     return (
         <div className="w-full max-w-md bg-zinc-950 border border-white/10 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-500">
             {/* Header / Score */}
-            <div className="bg-gradient-to-br from-blue-900/50 to-purple-900/50 p-6 flex flex-col items-center border-b border-white/5">
+            <div className="bg-gradient-to-br from-blue-900/50 to-purple-900/50 p-6 flex flex-col items-center border-b border-white/5 relative">
                 <div className="relative mb-2">
                     <Trophy className={`h-12 w-12 ${getScoreColor(assessment.score)}`} />
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-1">Assessment Complete</h2>
-                <div className="flex items-baseline gap-1">
+                <div className="flex items-baseline gap-1 mb-4">
                     <span className={`text-4xl font-bold ${getScoreColor(assessment.score)}`}>
                         {assessment.score}
                     </span>
                     <span className="text-white/40 text-sm">/ 100</span>
+                </div>
+
+                {/* Qualification Badge */}
+                <div className={`px-4 py-1.5 rounded-full border text-xs font-bold uppercase tracking-wide ${getQualificationColor(assessment.qualification_likeliness)}`}>
+                    Hiring Probability: {assessment.qualification_likeliness}
                 </div>
             </div>
 

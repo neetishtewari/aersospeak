@@ -15,6 +15,7 @@ export interface Feedback {
 export interface Assessment {
     summary: string;
     score: number;
+    qualification_likeliness: "Low" | "Medium" | "High" | "Very High";
     strengths: string[];
     improvements: string[];
 }
