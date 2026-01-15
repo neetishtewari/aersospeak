@@ -17,7 +17,7 @@ export async function POST(req: Request) {
         }
 
         let aiText = message;
-        let aiResponse = { reply: message, feedback: null };
+        let aiResponse = { reply: message, feedback: null, assessment: null };
 
         if (!ttsOnly) {
             const scenario = SCENARIOS.find(s => s.id === scenarioId);
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
                         role: "system",
                         content: isAssessmentPhase
                             ? "IMPORTANT: End the interview. Generate the assessment JSON."
-                            : "IMPORTANT: You are the interviewer. Do NOT repeat the user. Ask the next question now."
+                            : "IMPORTANT: You are the interviewer. Listen to the candidate's last answer. Acknowledge it briefly, then ask a relevant follow-up question. Do NOT repeat yourself. Do NOT use the exact same question structure every time."
                     }
                 ],
                 max_tokens: 500,
