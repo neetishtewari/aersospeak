@@ -303,20 +303,30 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 });
 
                 connection.on(LiveTranscriptionEvents.SpeechStarted, () => {
-                    addDebug(">> SPEECH STARTED (Barge-in Logic Triggered)");
+                    addDebug(">> SPEECH STARTED (Potential Barge-in)");
+                    // Don't stop immediately. Wait for some text to be sure it's not noise/echo.
                     isUserSpeakingRef.current = true;
-                    stopAudio(); // Stop any current playback
-                    setState("listening");
                 });
 
                 connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
                     addDebug(">> UTTERANCE END");
-                    // Can be used to mark end of user speech if silence is detected
                     isUserSpeakingRef.current = false;
                 });
 
                 connection.on(LiveTranscriptionEvents.Transcript, (data) => {
                     const trans = data.channel.alternatives[0].transcript;
+
+                    // BARGE-IN CHECK: If we get ANY transcript text while speaking, stop!
+                    if (trans && trans.trim().length > 0) {
+                        // Check if we need to interrupt
+                        if (stateRef.current === 'speaking' || isPlayingRef.current) {
+                            addDebug(`>> INTERRUPTING: "${trans.substring(0, 15)}..."`);
+                            stopAudio();
+                            setState("listening");
+                            isUserSpeakingRef.current = true;
+                        }
+                    }
+
                     if (trans && data.is_final) {
                         addDebug(`Transcript: "${trans}"`);
 
