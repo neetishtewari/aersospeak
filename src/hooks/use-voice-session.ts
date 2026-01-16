@@ -44,10 +44,11 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
     const deepgramRef = useRef<LiveClient | null>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
-    const audioQueueRef = useRef<string[]>([]); // Queue of base64 audio chunks
+    const audioQueueRef = useRef<string[]>([]);
     const pendingAudioRef = useRef<ArrayBuffer[]>([]);
     const historyRef = useRef<{ role: string; content: string }[]>([]);
     const isPlayingRef = useRef(false);
+    const isUserSpeakingRef = useRef(false); // Track VAD state
 
     // Ref to track state in callbacks without re-binding
     const stateRef = useRef<VoiceSessionState>("idle");
@@ -79,7 +80,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
     const playAudio = useCallback(async (base64Audio: string) => {
         try {
-            // Re-create context if it was closed by barge-in
+            // Re-create context if it was closed
             if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
                 audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             } else if (audioContextRef.current.state === 'suspended') {
@@ -121,9 +122,12 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
         // Process loop
         while (audioQueueRef.current.length > 0) {
-            // Check if we should stop
-            if (stateRef.current === 'listening') {
+            // If user is speaking, stop playback (Barge-in check)
+            if (isUserSpeakingRef.current) {
+                addDebug("User is speaking, aborting playback loop");
+                stopAudio(); // Ensures context closed and queue cleared
                 isPlayingRef.current = false;
+                setState("listening");
                 return;
             }
 
@@ -137,7 +141,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
         addDebug("Audio finished");
         setState("listening");
         addDebug("Returning to listening state");
-    }, [playAudio, addDebug]);
+    }, [playAudio, addDebug, stopAudio]);
 
     const handleProcessing = useCallback(async (text: string) => {
         if (!text.trim()) return;
@@ -174,11 +178,12 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 addDebug("Final Assessment Received");
             }
 
-            if (stateRef.current !== 'listening' && stateRef.current !== 'idle') {
+            // Only queue if user is NOT speaking
+            if (!isUserSpeakingRef.current) {
                 audioQueueRef.current.push(data.audio);
                 processAudioQueue();
             } else {
-                addDebug("Audio discarded due to barge-in/state change");
+                addDebug("Audio discarded - User is speaking");
             }
 
         } catch (err) {
@@ -221,6 +226,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             debugRef.current = [];
             audioQueueRef.current = [];
             historyRef.current = [];
+            isUserSpeakingRef.current = false;
 
             addDebug("Starting session...");
 
@@ -241,7 +247,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 smart_format: true,
                 interim_results: true,
                 utterance_end_ms: scenario.silenceTimeoutMs || 2000,
-                vad_events: true,
+                vad_events: true, // Needed for SpeechStarted
             });
             addDebug(`VAD Timeout set to: ${scenario.silenceTimeoutMs || 2000}ms`);
             deepgramRef.current = connection;
@@ -271,7 +277,8 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                             });
                             if (res.ok) {
                                 const data = await res.json();
-                                if (deepgramRef.current && stateRef.current !== 'listening') {
+                                // Only queue if user is NOT speaking
+                                if (deepgramRef.current && !isUserSpeakingRef.current) {
                                     audioQueueRef.current.push(data.audio);
                                     processAudioQueue();
                                     historyRef.current.push({ role: "assistant", content: scenario.initialMessage });
@@ -297,16 +304,24 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
                 connection.on(LiveTranscriptionEvents.SpeechStarted, () => {
                     addDebug(">> SPEECH STARTED (Barge-in Logic Triggered)");
-                    if (stateRef.current === 'speaking' || isPlayingRef.current) {
-                        stopAudio();
-                        setState("listening");
-                    }
+                    isUserSpeakingRef.current = true;
+                    stopAudio(); // Stop any current playback
+                    setState("listening");
+                });
+
+                connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
+                    addDebug(">> UTTERANCE END");
+                    // Can be used to mark end of user speech if silence is detected
+                    isUserSpeakingRef.current = false;
                 });
 
                 connection.on(LiveTranscriptionEvents.Transcript, (data) => {
                     const trans = data.channel.alternatives[0].transcript;
                     if (trans && data.is_final) {
                         addDebug(`Transcript: "${trans}"`);
+
+                        // If we have a final transcript, user finished a phrase
+                        isUserSpeakingRef.current = false;
 
                         if (stateRef.current !== "listening") {
                             setState("listening");
@@ -353,7 +368,11 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
             const keepAliveInterval = setInterval(() => {
                 if (deepgramRef.current?.getReadyState() === 1) {
-                    deepgramRef.current.keepAlive();
+                    try {
+                        deepgramRef.current.keepAlive();
+                    } catch (e) {
+                        // ignore keepalive errors
+                    }
                 }
             }, 3000);
 
@@ -371,7 +390,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
             setError(err.message || "Failed to start voice session");
             setState("idle");
         }
-    }, [handleProcessing, addDebug, scenario, stopSession]);
+    }, [handleProcessing, addDebug, scenario, stopSession, processAudioQueue, stopAudio]);
 
     const completeTurn = useCallback(() => {
         if (!transcript) return;
