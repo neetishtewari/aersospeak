@@ -58,7 +58,7 @@ export const SCENARIOS: Scenario[] = [
         icon: 'Briefcase',
         difficulty: 'Medium',
         // Manual mode OFF, but long silence timeout
-        silenceTimeoutMs: 4000,
+        silenceTimeoutMs: 2000,
         systemPrompt: `You are a senior recruiter for a major international airline.
     You are conducting an intense, professional interview with a candidate (the user) for a cabin crew position.
     

@@ -49,6 +49,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
     const historyRef = useRef<{ role: string; content: string }[]>([]);
     const isPlayingRef = useRef(false);
     const isUserSpeakingRef = useRef(false); // Track VAD state
+    const transcriptPartsRef = useRef(""); // Buffer for turn logic
 
     // Ref to track state in callbacks without re-binding
     const stateRef = useRef<VoiceSessionState>("idle");
@@ -311,6 +312,16 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
                     addDebug(">> UTTERANCE END");
                     isUserSpeakingRef.current = false;
+
+                    // Processing Logic: Use accumulated buffer if available, otherwise use accumulated transcript
+                    const finalBuffer = transcriptPartsRef.current.trim();
+                    if (finalBuffer && stateRef.current === 'listening' && !scenario.manualEndpointing) {
+                        addDebug(`Processing buffered transcript: "${finalBuffer}"`);
+                        handleProcessing(finalBuffer);
+                        transcriptPartsRef.current = ""; // Clear buffer
+                        // Optional: You might want to clear main transcript or keep it. 
+                        // Currently we keep main transcript for display but process the "turn".
+                    }
                 });
 
                 connection.on(LiveTranscriptionEvents.Transcript, (data) => {
@@ -328,7 +339,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                     }
 
                     if (trans && data.is_final) {
-                        addDebug(`Transcript: "${trans}"`);
+                        addDebug(`Transcript (Final Chunk): "${trans}"`);
 
                         // If we have a final transcript, user finished a phrase
                         isUserSpeakingRef.current = false;
@@ -338,11 +349,11 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                         }
 
                         if (stateRef.current === "listening") {
+                            // Accumulate into buffer for processing
+                            transcriptPartsRef.current += " " + trans;
                             setTranscript((prev) => prev + " " + trans);
 
-                            if (!scenario.manualEndpointing) {
-                                handleProcessing(trans);
-                            }
+                            // DO NOT trigger handleProcessing here anymore. Wait for UtteranceEnd.
                         }
                     }
                 });
