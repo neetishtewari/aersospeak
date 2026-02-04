@@ -288,9 +288,13 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                                     processAudioQueue();
                                     historyRef.current.push({ role: "assistant", content: scenario.initialMessage });
                                 }
+                            } else {
+                                const err = await res.json().catch(() => ({}));
+                                addDebug(`Greeting Error: ${err.error || res.statusText}`);
                             }
-                        } catch (e) {
+                        } catch (e: any) {
                             console.error("Failed to play greeting", e);
+                            addDebug(`Greeting Failed: ${e.message}`);
                         }
                     })();
                 }
