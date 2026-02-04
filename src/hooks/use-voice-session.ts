@@ -162,7 +162,11 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 }),
             });
 
-            if (!res.ok) throw new Error("Chat processing failed");
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                addDebug(`Server Error: ${errorData.error || res.statusText}`);
+                throw new Error(errorData.error || "Chat processing failed");
+            }
 
             const data = await res.json();
             addDebug("AI response received");
