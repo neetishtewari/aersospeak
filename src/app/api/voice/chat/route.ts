@@ -65,18 +65,19 @@ export async function POST(req: Request) {
                   `;
 
             // 1. Get AI Response
+            console.time("OpenAI");
             const completion = await openai.chat.completions.create({
-                model: "gpt-4o",
+                model: "gpt-4o-mini",
                 temperature: 0.8,
                 response_format: { type: "json_object" },
                 messages: [
                     {
                         role: "system",
                         content: `${systemInstructions}
-                        
-                        OUTPUT FORMAT (JSON):
-                        ${jsonStructure}
-                        `,
+                    
+                    OUTPUT FORMAT (JSON):
+                    ${jsonStructure}
+                    `,
                     },
                     ...history,
                     { role: "user", content: message },
@@ -89,6 +90,7 @@ export async function POST(req: Request) {
                 ],
                 max_tokens: 500,
             });
+            console.timeEnd("OpenAI");
 
             const rawContent = completion.choices[0].message.content;
             if (!rawContent) throw new Error("No response from AI");
@@ -103,6 +105,7 @@ export async function POST(req: Request) {
 
         const deepgram = createClient(deepgramApiKey);
 
+        console.time("Deepgram");
         const response = await deepgram.speak.request(
             { text: aiText },
             { model: "aura-asteria-en" }
@@ -124,6 +127,7 @@ export async function POST(req: Request) {
         }
         const audioBuffer = Buffer.concat(chunks);
         const audioBase64 = audioBuffer.toString("base64");
+        console.timeEnd("Deepgram");
 
         return NextResponse.json({
             text: aiText,
