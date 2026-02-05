@@ -183,13 +183,14 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 addDebug("Final Assessment Received");
             }
 
-            // Only queue if user is NOT speaking
-            if (!isUserSpeakingRef.current) {
-                audioQueueRef.current.push(data.audio);
-                processAudioQueue();
-            } else {
-                addDebug("Audio discarded - User is speaking");
+            // OPTIMISTIC PLAYBACK: Always queue audio, even if VAD triggered.
+            // If user is truly speaking, barge-in will kill it in milliseconds.
+            if (isUserSpeakingRef.current) {
+                addDebug("VAD was active, but forcing playback (Optimistic Mode)");
+                isUserSpeakingRef.current = false; // Reset for valid barge-in
             }
+            audioQueueRef.current.push(data.audio);
+            processAudioQueue();
 
         } catch (err) {
             console.error("Processing error", err);
@@ -334,6 +335,10 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
                 connection.on(LiveTranscriptionEvents.Transcript, (data) => {
                     const trans = data.channel.alternatives[0].transcript;
+
+                    if (trans && !data.is_final) {
+                        addDebug(`Transcript (Interim): "${trans}"`);
+                    }
 
                     // BARGE-IN CHECK: If we get ANY transcript text while speaking, stop!
                     if (trans && trans.trim().length > 0) {
