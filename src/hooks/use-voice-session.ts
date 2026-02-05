@@ -314,7 +314,7 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 connection.on(LiveTranscriptionEvents.SpeechStarted, () => {
                     addDebug(">> SPEECH STARTED (Potential Barge-in)");
                     // Don't stop immediately. Wait for some text to be sure it's not noise/echo.
-                    isUserSpeakingRef.current = true;
+                    // isUserSpeakingRef.current = true; // REMOVED: Wait for transcript to confirm speech
                 });
 
                 connection.on(LiveTranscriptionEvents.UtteranceEnd, () => {
@@ -337,12 +337,13 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
 
                     // BARGE-IN CHECK: If we get ANY transcript text while speaking, stop!
                     if (trans && trans.trim().length > 0) {
+                        isUserSpeakingRef.current = true;
+
                         // Check if we need to interrupt
                         if (stateRef.current === 'speaking' || isPlayingRef.current) {
                             addDebug(`>> INTERRUPTING: "${trans.substring(0, 15)}..."`);
                             stopAudio();
                             setState("listening");
-                            isUserSpeakingRef.current = true;
                         }
                     }
 
@@ -373,8 +374,14 @@ export function useVoiceSession({ scenario }: UseVoiceSessionProps) {
                 });
             });
 
-            addDebug("Requesting Microphone...");
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            addDebug("Requesting Microphone with Echo Cancellation...");
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
             addDebug("Microphone Acquired");
 
             const mediaRecorder = new MediaRecorder(stream);
