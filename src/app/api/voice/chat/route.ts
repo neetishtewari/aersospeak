@@ -85,7 +85,9 @@ export async function POST(req: Request) {
                         role: "system",
                         content: isAssessmentPhase
                             ? "IMPORTANT: End the interview. Generate the assessment JSON."
-                            : "IMPORTANT: You are the interviewer. Listen to the candidate's last answer. Acknowledge it briefly, then ask a relevant follow-up question. Do NOT repeat yourself. Do NOT use the exact same question structure every time."
+                            : (scenarioId === 'passenger-drunk'
+                                ? "IMPORTANT: Stay in character as the intoxicated passenger. React emotionally to what the user said. Do NOT be polite. Do NOT ask helpful questions like an instructor. If they are firm, back down slightly but complain. If they are soft, push for a drink."
+                                : "IMPORTANT: You are the interviewer. Listen to the candidate's last answer. Acknowledge it briefly, then ask a relevant follow-up question. Do NOT repeat yourself. Do NOT use the exact same question structure every time.")
                     }
                 ],
                 max_tokens: 500,
